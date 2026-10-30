@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — History</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="record"><i class="dot"></i><span class="k">RECORDS</span><span class="v">—</span></span>
+        <span class="pill" data-pill="history"><i class="dot"></i><span class="k">VISITS</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+        <a class="tab" href="history.html" aria-current="page">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta"><span>LOCAL VISITS</span><span class="sep"></span><span id="histMeta">— ITEMS</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <h1 class="cap">HISTORY <span class="cap-n" id="histCount">—</span></h1>
+  <p class="hint">Everything the LYGO Browser visited, newest first. Internal HUD pages are not recorded. Say a
+    visit out loud and it becomes a Bible record — history is raw, the Bible is curated.</p>
+
+  <div class="listbar">
+    <input class="inp" id="histQ" type="search" placeholder="Filter history…" spellcheck="false" autocomplete="off">
+    <button class="btn" type="button" id="histArchiveAll">ARCHIVE EVERY UNARCHIVED HIT</button>
+    <button class="btn btn--danger" type="button" id="histClear">CLEAR HISTORY</button>
+  </div>
+
+  <div class="panel">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th scope="col">WHEN</th>
+            <th scope="col">TITLE</th>
+            <th scope="col">URL</th>
+            <th scope="col" class="ta-r">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody id="histRows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="histEmpty" hidden>
+      <b>No history yet</b>
+      Browse something with the LYGO Browser and it appears here.
+    </div>
+  </div>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  var state = { items: [] };
+
+  function act(label, id, cls, extra) {
+    return L.el('button', {
+      class: 'btn btn--sm ' + (cls || ''), type: 'button',
+      'data-act': id, text: label
+    });
+  }
+
+  function row(h) {
+    var title = h.title || h.url || '(untitled)';
+    return L.el('tr', { 'data-url': h.url || '' },
+      L.el('td', { class: 'mono dim', text: L.fmtDate(h.ts) }),
+      L.el('td', {}, L.el('span', { class: 'cell-label', title: title, text: title })),
+      L.el('td', {}, L.el('span', { class: 'mono trunc cell-url', title: h.url || '', text: h.url || '' })),
+      L.el('td', {},
+        L.el('div', { class: 'actions' },
+          act('OPEN', 'open'),
+          act('BIBLE', 'add'),
+          act('ARCHIVE', 'archive', 'btn--gold'))));
+  }
+
+  function render(items) {
+    state.items = items;
+    var body = $('#histRows');
+    var frag = document.createDocumentFragment();
+    items.slice(0, 800).forEach(function (h) { frag.append(row(h)); });
+    body.replaceChildren(frag);
+    $('#histCount').textContent = L.fmtInt(items.length);
+    $('#histMeta').textContent = L.fmtInt(items.length) + ' ITEMS';
+    $('#histEmpty').hidden = items.length > 0;
+    if (L.pills) L.pills.set('history', L.fmtInt(items.length), 'idle');
+  }
+
+  function load() {
+    var q = $('#histQ').value.trim();
+    L.api('/api/history?limit=1500' + (q ? '&q=' + encodeURIComponent(q) : ''), { silent: true })
+      .then(function (d) { render((d && d.items) || []); })
+      .catch(function () { render([]); });
+  }
+
+  $('#histQ').addEventListener('input', L.debounce(load, 220));
+
+  $('#histRows').addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button[data-act]') : null;
+    if (!btn) return;
+    var tr = btn.closest('tr');
+    var url = tr ? tr.dataset.url : '';
+    if (!url) return;
+    var what = btn.dataset.act;
+    if (what === 'open') {
+      L.openUrl(url);
+    } else if (what === 'add') {
+      L.api('/api/bible/add', { method: 'POST', body: { url: url, title: tr.children[1].textContent } })
+        .then(function (r) { if (r && r.ok) L.toast('Added to ' + r.record.folder, 'ok'); });
+    } else if (what === 'archive') {
+      L.api('/api/bible/add', { method: 'POST', body: { url: url, title: tr.children[1].textContent } })
+        .then(function (r) {
+          if (!r || !r.ok) return;
+          L.toast('Archiving…', 'info');
+          return L.api('/api/bible/archive', { method: 'POST', body: { id: r.record.id } })
+            .then(function (a) {
+              L.toast(a && a.ok ? 'Archived · ' + (a.sha256 || '').slice(0, 12) : 'Archive failed',
+                      a && a.ok ? 'ok' : 'err');
+            });
+        });
+    }
+  });
+
+  $('#histArchiveAll').addEventListener('click', function () {
+    var urls = state.items.slice(0, 25).map(function (h) { return h.url; }).filter(Boolean);
+    if (!urls.length) { L.toast('Nothing to archive', 'err'); return; }
+    L.toast('Archiving first ' + urls.length + ' visits, one at a time…', 'info');
+    var i = 0;
+    (function next() {
+      if (i >= urls.length) { L.toast('Batch finished', 'ok'); load(); return; }
+      var url = urls[i++];
+      L.api('/api/bible/add', { method: 'POST', body: { url: url }, silent: true })
+        .then(function (r) {
+          if (!r || !r.ok) { next(); return; }
+          return L.api('/api/bible/archive', { method: 'POST', body: { id: r.record.id }, silent: true })
+            .then(next, next);
+        })
+        .catch(next);
+    })();
+  });
+
+  $('#histClear').addEventListener('click', function () {
+    var b = this;
+    if (b.dataset.armed !== '1') {
+      b.dataset.armed = '1';
+      b.textContent = 'CLICK AGAIN TO CLEAR';
+      setTimeout(function () { b.dataset.armed = '0'; b.textContent = 'CLEAR HISTORY'; }, 4000);
+      return;
+    }
+    L.api('/api/history/clear', { method: 'POST', body: {} })
+      .then(function () { L.toast('History cleared', 'ok'); load(); });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

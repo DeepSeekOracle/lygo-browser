@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Credential Vault</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="vault"><i class="dot"></i><span class="k">VAULT</span><span class="v">—</span></span>
+        <span class="pill" data-pill="record"><i class="dot"></i><span class="k">RECORDS</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html" aria-current="page">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+              <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta">
+        <span>DPAPI · CURRENTUSER</span>
+        <span class="sep"></span>
+        <span id="vaultMeta">— ITEMS</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <p class="lede">DPAPI-sealed on this Windows account. Secrets never leave the machine and are never autofilled.</p>
+
+  <div class="vault-grid">
+
+    <section class="vault-list" aria-labelledby="vaultCap">
+      <h2 class="cap" id="vaultCap">CREDENTIALS <span class="cap-n" id="vaultCount">—</span></h2>
+      <div class="panel">
+        <div class="tbl-wrap">
+          <table class="tbl tbl--vault">
+            <thead>
+              <tr>
+                <th scope="col">LABEL</th>
+                <th scope="col">USER</th>
+                <th scope="col">URL</th>
+                <th scope="col">UPDATED</th>
+                <th scope="col" class="ta-r">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="vaultRows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="vaultEmpty">
+          <b>No credentials yet</b>
+          Add one on the right. It seals with DPAPI under this Windows account.
+        </div>
+      </div>
+      <p class="warn mt-s">Secrets are never logged. REVEAL needs a second click, and a revealed value clears itself after 20 seconds.</p>
+    </section>
+
+    <aside class="panel form-panel" id="formPanel" aria-labelledby="formCap">
+      <div class="panel-h"><span id="formCap">ADD CREDENTIAL</span><span class="cap-n" id="formMode">NEW</span></div>
+      <form class="form" id="vaultForm" autocomplete="off">
+        <input type="hidden" id="vId" value="">
+        <div class="f">
+          <label for="vLabel">LABEL</label>
+          <input class="inp" id="vLabel" type="text" maxlength="120" required spellcheck="false">
+        </div>
+        <div class="f">
+          <label for="vUser">USER</label>
+          <input class="inp" id="vUser" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="f">
+          <label for="vSecret">SECRET</label>
+          <div class="secret-wrap">
+            <input class="inp" id="vSecret" type="password" autocomplete="new-password" spellcheck="false" placeholder="Stored DPAPI-sealed">
+            <button class="btn" type="button" id="vToggle" aria-pressed="false">SHOW</button>
+          </div>
+        </div>
+        <div class="f">
+          <label for="vUrl">URL</label>
+          <input class="inp" id="vUrl" type="text" spellcheck="false" placeholder="https://example.com">
+        </div>
+        <div class="f">
+          <label for="vNotes">NOTES</label>
+          <textarea class="ta" id="vNotes" rows="3" spellcheck="false"></textarea>
+        </div>
+        <p class="warn">Secrets are DPAPI-sealed. Never logged. Never autofilled into third-party forms.</p>
+        <div class="form-actions">
+          <button class="btn btn--gold" type="submit" id="vSave">SAVE</button>
+          <button class="btn" type="button" id="vCancel" hidden>CANCEL</button>
+        </div>
+      </form>
+    </aside>
+
+  </div>
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  var state = { items: [], editId: null, reveal: null, confirm: null, online: false };
+
+  /* ---- helpers --------------------------------------------------------- */
+
+  function action(act, id, label, extra) {
+    return L.el('button', {
+      class: 'btn btn--sm ' + (extra || ''), type: 'button',
+      'data-act': act, 'data-id': id, text: label
+    });
+  }
+
+  function clearConfirm() {
+    if (state.confirm) {
+      clearTimeout(state.confirm.timer);
+      var btn = state.confirm.btn;
+      if (btn && btn.isConnected) {
+        btn.textContent = state.confirm.label;
+        btn.classList.remove('is-armed');
+      }
+    }
+    state.confirm = null;
+  }
+
+  function armConfirm(btn, label, fn) {
+    if (state.confirm && state.confirm.btn === btn) {
+      var armed = state.confirm.fn;
+      clearConfirm();
+      armed();
+      return;
+    }
+    clearConfirm();
+    var original = btn.textContent;
+    btn.textContent = label;
+    btn.classList.add('is-armed');
+    var timer = setTimeout(function () {
+      if (btn.isConnected) {
+        btn.textContent = original;
+        btn.classList.remove('is-armed');
+      }
+      if (state.confirm && state.confirm.btn === btn) state.confirm = null;
+    }, 3000);
+    state.confirm = { btn: btn, fn: fn, label: original, timer: timer };
+  }
+
+  /* ---- reveal ---------------------------------------------------------- */
+
+  function clearReveal() {
+    if (!state.reveal) return;
+    clearInterval(state.reveal.timer);
+    if (state.reveal.row && state.reveal.row.isConnected) state.reveal.row.remove();
+    state.reveal = null;
+  }
+
+  function showSecret(item, secret) {
+    var row = null;
+    var rows = L.$$('#vaultRows tr[data-id]');
+    for (var i = 0; i < rows.length; i += 1) {
+      if (rows[i].dataset.id === item.id) { row = rows[i]; break; }
+    }
+    if (!row) return;
+
+    var ttl = L.el('span', { class: 'secret-ttl', text: 'CLEARS IN 20s' });
+    var secretRow = L.el('tr', { class: 'secret-row' },
+      L.el('td', { colspan: '5' },
+        L.el('div', { class: 'secret-line' },
+          L.el('span', { class: 'secret-k', text: 'SECRET' }),
+          L.el('span', { class: 'secret-val', text: secret }),
+          ttl)));
+    row.after(secretRow);
+
+    var left = 20;
+    var ticker = setInterval(function () {
+      left -= 1;
+      if (left <= 0) { clearReveal(); return; }
+      if (ttl.isConnected) ttl.textContent = 'CLEARS IN ' + left + 's';
+    }, 1000);
+    state.reveal = { row: secretRow, timer: ticker };
+  }
+
+  function doReveal(item) {
+    clearReveal();
+    L.api('/api/vault/reveal', { method: 'POST', body: { id: item.id } })
+      .then(function (res) {
+        if (!res || res.ok === false || typeof res.secret !== 'string' || res.secret.length === 0) {
+          L.toast((res && res.error) || 'No secret stored for this item', 'err');
+          return;
+        }
+        showSecret(item, res.secret);
+        res.secret = null;
+      })
+      .catch(function () { /* api() already reported it */ });
+  }
+
+  function fillIntoPage(item) {
+    /* Explicit, one-shot fill of the ACTIVE tab. The bridge refuses if the tab's host
+       does not match this credential's host, and the secret never reaches this page. */
+    L.api('/api/vault/fill', { method: 'POST', body: { id: item.id } })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Fill refused', 'err');
+          return;
+        }
+        L.toast('Filled into the active tab — secret never shown here', 'ok');
+      })
+      .catch(function () { /* api() already reported it */ });
+  }
+
+  function copySecret(item) {    L.api('/api/vault/reveal', { method: 'POST', body: { id: item.id }, silent: true })
+      .then(function (res) {
+        if (!res || res.ok === false || typeof res.secret !== 'string' || res.secret.length === 0) {
+          L.toast((res && res.error) || 'No secret stored for this item', 'err');
+          return;
+        }
+        var secret = res.secret;
+        res.secret = null;
+        return L.copy(secret).then(function (ok) {
+          L.toast(ok ? 'Copied — secret was not displayed' : 'Copy blocked by the host', ok ? 'ok' : 'err');
+        });
+      })
+      .catch(function () { L.toast('Reveal failed', 'err'); });
+  }
+
+  /* ---- table ----------------------------------------------------------- */
+
+  function renderRows() {
+    clearConfirm();
+    var body = $('#vaultRows');
+    body.replaceChildren();
+
+    var frag = document.createDocumentFragment();
+    state.items.forEach(function (item) {
+      var labelCell = L.el('td', {},
+        L.el('span', { class: 'cell-label', text: item.label || '(untitled)' }),
+        item.notes ? L.el('span', { class: 'cell-note', title: item.notes, text: item.notes }) : null);
+      /* The brief exposes hasSecret; the installed bridge only returns metadata,
+         so show the state only when the API actually reports it. */
+      if (typeof item.hasSecret === 'boolean') {
+        labelCell.append(L.el('span', { class: 'cell-has' },
+          L.el('span', {
+            class: 'dot ' + (item.hasSecret ? 'dot--ok' : ''),
+            title: item.hasSecret ? 'Secret stored' : 'No secret stored'
+          }),
+          L.el('span', { class: 'mono dim', text: item.hasSecret ? 'SET' : 'EMPTY' })));
+      }
+
+      var tr = L.el('tr', { 'data-id': item.id },
+        labelCell,
+        L.el('td', { class: 'mono', text: item.user || '—' }),
+        L.el('td', {}, L.el('span', { class: 'mono trunc cell-url', title: item.url || '', text: item.url || '—' })),
+        L.el('td', { class: 'mono dim', text: L.fmtDate(item.updated) }),
+        L.el('td', {},
+          L.el('div', { class: 'actions' },
+            action('fill', item.id, 'FILL'),
+            action('reveal', item.id, 'REVEAL'),
+            action('copy', item.id, 'COPY'),
+            action('edit', item.id, 'EDIT'),
+            action('delete', item.id, 'DELETE', 'btn--danger'))));
+      frag.append(tr);
+    });
+    body.append(frag);
+
+    $('#vaultEmpty').hidden = state.items.length > 0;
+    $('#vaultCount').textContent = L.fmtInt(state.items.length);
+    $('#vaultMeta').textContent = L.fmtInt(state.items.length) + ' ITEMS';
+
+    if (!state.items.length) {
+      var empty = $('#vaultEmpty');
+      empty.replaceChildren(
+        L.el('b', { text: state.online ? 'No credentials yet' : 'Vault offline' }),
+        state.online
+          ? 'Add one on the right. It seals with DPAPI under this Windows account.'
+          : 'Start the LYGO Browser to read the vault.');
+    }
+  }
+
+  /* ---- form ------------------------------------------------------------ */
+
+  function setToggle(show) {
+    var btn = $('#vToggle');
+    btn.textContent = show ? 'HIDE' : 'SHOW';
+    btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+  }
+
+  function resetForm() {
+    state.editId = null;
+    $('#vaultForm').reset();
+    $('#vId').value = '';
+    var secret = $('#vSecret');
+    secret.type = 'password';
+    secret.placeholder = 'Stored DPAPI-sealed';
+    setToggle(false);
+    $('#formCap').textContent = 'ADD CREDENTIAL';
+    $('#formMode').textContent = 'NEW';
+    $('#vCancel').hidden = true;
+  }
+
+  function startEdit(item) {
+    clearReveal();
+    state.editId = item.id;
+    $('#vId').value = item.id;
+    $('#vLabel').value = item.label || '';
+    $('#vUser').value = item.user || '';
+    $('#vUrl').value = item.url || '';
+    $('#vNotes').value = item.notes || '';
+    var secret = $('#vSecret');
+    secret.value = '';
+    secret.type = 'password';
+    secret.placeholder = item.hasSecret ? 'Leave blank to keep the sealed secret' : 'Secret';
+    setToggle(false);
+    $('#formCap').textContent = 'EDIT CREDENTIAL';
+    $('#formMode').textContent = 'EDIT';
+    $('#vCancel').hidden = false;
+    $('#vLabel').focus();
+    $('#formPanel').scrollIntoView({ block: 'nearest' });
+  }
+
+  function removeItem(item) {
+    clearReveal();
+    L.api('/api/vault/remove', { method: 'POST', body: { id: item.id } })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Delete failed', 'err');
+          return;
+        }
+        if (state.editId === item.id) resetForm();
+        L.toast('Credential removed', 'ok');
+        return loadVault();
+      })
+      .catch(function () { /* api() already reported it */ });
+  }
+
+  /* ---- events ---------------------------------------------------------- */
+
+  $('#vaultRows').addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button[data-act]') : null;
+    if (!btn) return;
+    var item = null;
+    for (var i = 0; i < state.items.length; i += 1) {
+      if (state.items[i].id === btn.dataset.id) { item = state.items[i]; break; }
+    }
+    if (!item) return;
+    var act = btn.dataset.act;
+    if (act === 'fill') {
+      armConfirm(btn, 'FILL IT?', function () { fillIntoPage(item); });
+    } else if (act === 'reveal') {
+      armConfirm(btn, 'SURE?', function () { doReveal(item); });
+    } else if (act === 'copy') {
+      copySecret(item);
+    } else if (act === 'edit') {
+      startEdit(item);
+    } else if (act === 'delete') {
+      armConfirm(btn, 'CONFIRM', function () { removeItem(item); });
+    }
+  });
+
+  $('#vToggle').addEventListener('click', function () {
+    var secret = $('#vSecret');
+    var show = secret.type === 'password';
+    secret.type = show ? 'text' : 'password';
+    setToggle(show);
+    secret.focus();
+  });
+
+  $('#vCancel').addEventListener('click', function () {
+    resetForm();
+    $('#vLabel').focus();
+  });
+
+  $('#vaultForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    clearConfirm();
+    var label = $('#vLabel').value.trim();
+    if (!label) {
+      L.toast('Label is required', 'err');
+      $('#vLabel').focus();
+      return;
+    }
+    var body = {
+      label: label,
+      user: $('#vUser').value.trim(),
+      secret: $('#vSecret').value,
+      url: $('#vUrl').value.trim(),
+      notes: $('#vNotes').value.trim()
+    };
+    if (state.editId) body.id = state.editId;
+
+    var btn = $('#vSave');
+    btn.disabled = true;
+    btn.textContent = 'SEALING';
+    L.api('/api/vault/set', { method: 'POST', body: body })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Save failed', 'err');
+          return;
+        }
+        $('#vSecret').value = '';
+        L.toast(body.id ? 'Credential updated' : 'Credential sealed', 'ok');
+        resetForm();
+        return loadVault();
+      })
+      .catch(function () { /* api() already reported it */ })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = 'SAVE';
+      });
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && state.reveal) clearReveal();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) clearReveal();
+  });
+
+  /* ---- boot ------------------------------------------------------------ */
+
+  function loadVault() {
+    return L.api('/api/vault', { silent: true })
+      .then(function (data) {
+        state.items = data && Array.isArray(data.items) ? data.items : [];
+        state.online = true;
+      })
+      .catch(function () {
+        state.items = [];
+        state.online = false;
+      })
+      .then(function () {
+        clearReveal();
+        renderRows();
+      });
+  }
+
+  resetForm();
+  loadVault();
+})();
+</script>
+</body>
+</html>

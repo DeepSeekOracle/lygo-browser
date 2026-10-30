@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Agent</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+<style>
+  .agent-wrap { display: grid; grid-template-columns: 330px minmax(0,1fr); gap: 14px; align-items: start; }
+  .agent-side { display: grid; gap: 12px; }
+  .linkrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .linkrow:last-child { border-bottom: 0; }
+  .linkrow .nm { font: 600 9.5px/1 var(--mono); letter-spacing: .14em; color: var(--muted); width: 76px; }
+  .linkrow .dt { font: 400 10.5px/1.3 var(--mono); color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .linkrow .ms { font: 400 9.5px/1 var(--mono); color: var(--muted); }
+  .agent-chat { display: flex; flex-direction: column; min-height: 460px; }
+  .msgs { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto; max-height: calc(100vh - 330px); min-height: 260px; }
+  .msg { max-width: 88%; padding: 9px 11px; border-radius: 5px; border: 1px solid var(--line); }
+  .msg.user { align-self: flex-end; background: #1a1308; border-color: #3a2c14; }
+  .msg.bot { align-self: flex-start; background: var(--panel-2); }
+  .msg .who { font: 600 8.5px/1 var(--mono); letter-spacing: .16em; color: var(--muted); margin-bottom: 6px; }
+  .msg .body { white-space: pre-wrap; font-size: 12.5px; line-height: 1.55; color: var(--text); }
+  .msg .meta { margin-top: 7px; font: 400 9.5px/1.4 var(--mono); color: var(--muted); }
+  .composer { border-top: 1px solid var(--line); padding: 10px 12px 12px; }
+  .brainrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .seg { display: inline-flex; gap: 4px; }
+  .seg .btn.is-on { border-color: var(--gold); color: var(--gold); }
+  .thinking .dot { animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  @media (max-width: 900px) { .agent-wrap { grid-template-columns: 1fr; } .msgs { max-height: 420px; } }
+</style>
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="Link status">
+        <span class="pill" data-pill="console"><i class="dot"></i><span class="k">CONSOLE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="forge"><i class="dot"></i><span class="k">FORGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="record"><i class="dot"></i><span class="k">RECORDS</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+        <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html" aria-current="page">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta"><span>CONSOLE BRAIN</span><span class="sep"></span><span id="chatMeta">LOCAL</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="page agent-wrap">
+
+  <section class="agent-side">
+    <div class="panel">
+      <div class="panel-h"><span>LYGO LINKS</span><span class="cap-n" id="linkAt">LIVE</span></div>
+      <div id="linkRows"><div class="empty">probing…</div></div>
+      <p class="hint mt-s">The browser is the hub: console and forge are probed by the bridge, not by this page,
+        so the answer survives their CORS settings.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><span>QUICK TASKS</span><span class="cap-n">ON THIS TAB</span></div>
+      <div class="quick">
+        <button class="btn" type="button" data-task="summarize">SUMMARIZE THIS PAGE</button>
+        <button class="btn" type="button" data-task="file">FILE THIS PAGE</button>
+        <button class="btn" type="button" data-task="bible">ASK THE BIBLE</button>
+        <button class="btn" type="button" data-task="clear">CLEAR CHAT</button>
+      </div>
+      <p class="hint mt-s" id="taskHint">Summarize and File read the tab you were on before opening this one.</p>
+    </div>
+  </section>
+
+  <section class="panel agent-chat">
+    <div class="panel-h"><span>AGENT · CONSOLE BRAIN</span><span class="cap-n" id="chatState">IDLE</span></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="composer">
+      <div class="brainrow">
+        <span class="seg" id="brainSeg">
+          <button class="btn btn--sm" type="button" data-brain="auto">AUTO</button>
+          <button class="btn btn--sm" type="button" data-brain="console">CONSOLE</button>
+          <button class="btn btn--sm is-on" type="button" data-brain="nvidia">NVIDIA</button>
+          <button class="btn btn--sm" type="button" data-brain="local">LOCAL</button>
+        </span>
+        <span class="hint" id="brainHint">default: nvidia bridge · console only when you pick it</span>
+      </div>
+      <textarea class="ta" id="chatIn" rows="3" placeholder="Task the agent…  (Enter sends, Shift+Enter makes a new line)"></textarea>
+      <div class="form-actions">
+        <button class="btn btn--gold" type="button" id="sendBtn">SEND</button>
+        <button class="btn" type="button" id="clearBtn">CLEAR</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  var state = {
+    brain: 'nvidia',
+    busy: false,
+    history: [],
+    lastReply: null
+  };
+
+  var SYSTEM = [
+    'You are the LYGO agent, running inside the LYGO Browser.',
+    'You serve Justin Helmer (Lightfather). You are concise, concrete and never invent facts.',
+    'If you need a page, ask for it; the human can open a tab and you can read it through the LYGO bridge.'
+  ].join(' ');
+
+  /* ---------------- links ---------------- */
+
+  function linkRow(id, label, item) {
+    var up = item && item.up;
+    return L.el('div', { class: 'linkrow' },
+      L.el('i', { class: 'dot ' + (up ? 'dot--ok' : 'dot--bad') }),
+      L.el('span', { class: 'nm', text: label }),
+      L.el('span', { class: 'dt', title: (item && item.detail) || '', text: (item && item.detail) || (up ? 'up' : 'down') }),
+      L.el('span', { class: 'ms', text: item && item.ms ? item.ms + 'ms' : '' }));
+  }
+
+  function loadLinks() {
+    L.api('/api/links', { silent: true }).then(function (d) {
+      var links = (d && d.links) || {};
+      var host = $('#linkRows');
+      host.replaceChildren();
+      [['console', 'CONSOLE'], ['forge', 'FORGE'], ['manager', 'MANAGER'],
+       ['bridge', 'BRIDGE'], ['nvidia', 'NVIDIA'], ['browser', 'BROWSER']].forEach(function (pair) {
+        host.append(linkRow(pair[0], pair[1], links[pair[0]]));
+      });
+      $('#linkAt').textContent = (d && d.upCount ? d.upCount : 0) + '/6 UP';
+      L.pills.set('console', links.console && links.console.up ? 'ON' : 'OFF',
+                  links.console && links.console.up ? 'ok' : 'bad');
+      L.pills.set('forge', links.forge && links.forge.up ? 'ON' : 'OFF',
+                  links.forge && links.forge.up ? 'ok' : 'bad');
+    }).catch(function () {
+      $('#linkRows').replaceChildren(L.el('div', { class: 'empty', text: 'bridge offline' }));
+    });
+  }
+
+  /* ---------------- chat ---------------- */
+
+  function bubble(role, text, meta) {
+    var node = L.el('div', { class: 'msg ' + (role === 'user' ? 'user' : 'bot') },
+      L.el('div', { class: 'who', text: role === 'user' ? 'YOU' : 'AGENT' }),
+      L.el('div', { class: 'body', text: text }));
+    if (meta) node.append(L.el('div', { class: 'meta', text: meta }));
+    $('#msgs').append(node);
+    $('#msgs').scrollTop = $('#msgs').scrollHeight;
+    return node;
+  }
+
+  function restore() {
+    try {
+      var saved = JSON.parse(localStorage.getItem('lygo.agent.chat') || '[]');
+      if (!Array.isArray(saved)) return;
+      state.history = saved.slice(-24);
+      state.history.forEach(function (m) { bubble(m.role, m.content); });
+    } catch (e) { /* a corrupt cache is not worth an error */ }
+  }
+
+  function persist() {
+    try { localStorage.setItem('lygo.agent.chat', JSON.stringify(state.history.slice(-24))); }
+    catch (e) { /* quota is not fatal */ }
+  }
+
+  function setBusy(on) {
+    state.busy = on;
+    $('#sendBtn').disabled = on;
+    $('#chatState').textContent = on ? 'THINKING' : 'IDLE';
+    $('#msgs').classList.toggle('thinking', on);
+  }
+
+  function send(text) {
+    var q = String(text || '').trim();
+    if (!q || state.busy) return;
+    bubble('user', q);
+    state.history.push({ role: 'user', content: q });
+    persist();
+    $('#chatIn').value = '';
+    setBusy(true);
+
+    var payload = state.history.slice(-12).map(function (m) {
+      return { role: m.role, content: m.content };
+    });
+    payload.unshift({ role: 'system', content: SYSTEM });
+
+    L.api('/api/agent/chat', {
+      method: 'POST',
+      body: { messages: payload, brain: state.brain, maxTokens: 900 },
+      silent: true
+    }).then(function (r) {
+      setBusy(false);
+      if (!r || r.ok === false) {
+        var why = (r && r.error) || 'no answer';
+        var tried = (r && r.tried) ? ' · tried ' + r.tried.join(' → ') : '';
+        bubble('assistant', 'No brain answered: ' + why + tried);
+        $('#chatState').textContent = 'OFFLINE';
+        return;
+      }
+      var meta = (r.brain || '?') + ' · ' + (r.model || '') + ' · ' + (r.ms || 0) + 'ms'
+               + (r.receipt ? ' · ' + r.receipt.slice(0, 8) : '');
+      bubble('assistant', r.reply, meta);
+      state.history.push({ role: 'assistant', content: r.reply });
+      persist();
+      $('#chatMeta').textContent = String(r.brain || '').toUpperCase();
+      $('#chatState').textContent = 'IDLE';
+      if (r.tried && r.tried.length > 1) {
+        $('#brainHint').textContent = 'console failed → answered by ' + r.brain;
+      }
+    }).catch(function (e) {
+      setBusy(false);
+      bubble('assistant', 'Bridge error: ' + (e && e.message ? e.message : e));
+    });
+  }
+
+  /* ---------------- quick tasks ---------------- */
+
+  function activePage() {
+    return L.api('/api/agent/snapshot', { method: 'POST', body: {}, silent: true });
+  }
+
+  function taskSummarize() {
+    activePage().then(function (d) {
+      var s = (d && d.snapshot) || {};
+      var body = (s.text || '').slice(0, 6000);
+      if (!body) { L.toast('No page text to summarize', 'err'); return; }
+      send('Summarize this page in 6 bullets, then one line on why it matters to LYGO.\n\n'
+         + 'TITLE: ' + (s.title || '') + '\nURL: ' + (s.url || '') + '\n\n' + body);
+    }).catch(function () { L.toast('Could not read the active tab', 'err'); });
+  }
+
+  function taskFile() {
+    activePage().then(function (d) {
+      var s = (d && d.snapshot) || {};
+      if (!s.url) { L.toast('No active page', 'err'); return; }
+      return L.api('/api/bible/add', { method: 'POST', body: { url: s.url, title: s.title } })
+        .then(function (r) {
+          if (!r || !r.ok) { L.toast('Could not file it', 'err'); return; }
+          L.toast('Filed in ' + r.record.folder, 'ok');
+          bubble('assistant', 'Filed: ' + r.record.title + '\n' + r.record.url + '\nfolder: ' + r.record.folder);
+        });
+    }).catch(function () { L.toast('Could not read the active tab', 'err'); });
+  }
+
+  function taskBible() {
+    var q = window.prompt('Search the Bible for:', '');
+    if (!q) return;
+    L.api('/api/bible/search?q=' + encodeURIComponent(q) + '&limit=8').then(function (d) {
+      var hits = (d && d.hits) || [];
+      if (!hits.length) { bubble('assistant', 'Nothing in the Bible matches “' + q + '”.'); return; }
+      var lines = hits.map(function (h) {
+        return '- ' + h.title + ' [' + h.folder + '] ' + h.url + ((h.archived && h.archived.at) ? ' (archived)' : '');
+      });
+      bubble('assistant', 'Bible hits for “' + q + '”:\n' + lines.join('\n'));
+    }).catch(function () { L.toast('Bible search failed', 'err'); });
+  }
+
+  function taskClear() {
+    state.history = [];
+    persist();
+    $('#msgs').replaceChildren();
+    bubble('assistant', 'Chat cleared. The Bible is untouched.');
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  document.querySelectorAll('[data-task]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = btn.dataset.task;
+      if (t === 'summarize') taskSummarize();
+      else if (t === 'file') taskFile();
+      else if (t === 'bible') taskBible();
+      else if (t === 'clear') taskClear();
+    });
+  });
+
+  document.querySelectorAll('#brainSeg [data-brain]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.brain = btn.dataset.brain;
+      document.querySelectorAll('#brainSeg .btn').forEach(function (b) { b.classList.remove('is-on'); });
+      btn.classList.add('is-on');
+      $('#brainHint').textContent = state.brain === 'auto'
+        ? 'auto: console → nvidia → local'
+        : 'pinned to ' + state.brain;
+    });
+  });
+
+  $('#sendBtn').addEventListener('click', function () { send($('#chatIn').value); });
+  $('#clearBtn').addEventListener('click', taskClear);
+  $('#chatIn').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); send($('#chatIn').value); }
+  });
+
+  restore();
+  if (!state.history.length) {
+    bubble('assistant', 'Agent ready. I answer through the LYGO console brain when it is up, '
+      + 'and fall back to the NVIDIA or local bridge when its provider fails. '
+      + 'Ask me anything, or use a quick task on the left.');
+  }
+  loadLinks();
+  setInterval(loadLinks, 5000);
+})();
+</script>
+</body>
+</html>

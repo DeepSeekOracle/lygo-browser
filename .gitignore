@@ -1,0 +1,16 @@
+# compiled output - build it (/src/LygoBrowser/app is the launcher's target)
+/app/
+/src/LygoBrowser/bin/
+/src/LygoBrowser/obj/
+*.pdb
+# user state: profile, Bible, vault, archives, screenshots
+/data/
+# clutter
+__pycache__/
+*.bak
+*.bak-*
+*.log
+*.tmp
+.env
+*.key
+*.pem

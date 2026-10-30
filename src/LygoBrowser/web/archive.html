@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Archive</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="archive"><i class="dot"></i><span class="k">ARCHIVE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="record"><i class="dot"></i><span class="k">RECORDS</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html" aria-current="page">ARCHIVE</a>
+              <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta">
+        <span>LOCAL COPIES</span>
+        <span class="sep"></span>
+        <span id="archiveMeta">— ITEMS</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <h1 class="cap" id="archiveCap">ARCHIVE <span class="cap-n" id="archiveCount">—</span></h1>
+  <p class="hint">Full local copies: page.html, page.md, shot.png and a SHA-256 receipt under /archive/&lt;id&gt;/.</p>
+
+  <div class="arc-grid" id="arcGrid"></div>
+
+  <div class="empty" id="arcEmpty" hidden>
+    <b>Nothing archived yet — archive a bookmark from the Bible.</b>
+    <a class="link" href="bible.html">OPEN THE BIBLE</a>
+  </div>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  function card(item) {
+    var id = String(item.id || '');
+    var title = item.title || item.url || id;
+    var thumb = L.el('div', { class: 'arc-thumb' });
+    var img = L.el('img', {
+      src: '/archive/' + encodeURIComponent(id) + '/thumb.png',
+      alt: '',
+      loading: 'lazy',
+      decoding: 'async'
+    });
+    img.addEventListener('error', function () {
+      if (!img.dataset.fallback) {          // older archives have only the full shot
+        img.dataset.fallback = '1';
+        img.src = '/archive/' + encodeURIComponent(id) + '/shot.png';
+        return;
+      }
+      img.remove();
+      thumb.classList.add('is-empty');
+      thumb.append(L.el('span', { class: 'thumb-empty', text: 'NO SHOT' }));
+    });
+    thumb.append(img);
+
+    var sha = String(item.sha256 || '');
+    var body = L.el('div', { class: 'arc-body' },
+      L.el('h2', { class: 'arc-title', title: title, text: title }),
+      L.el('div', { class: 'arc-meta' },
+        L.el('span', { text: L.domain(item.url) || '—' }),
+        L.el('span', { text: L.fmtDate(item.at) })),
+      L.el('div', { class: 'arc-meta' },
+        L.el('span', { text: L.fmtBytes(item.bytes) }),
+        L.el('span', { class: 'arc-sha', title: sha || '', text: 'SHA ' + (sha ? sha.slice(0, 12) : '—') })),
+      L.el('div', { class: 'arc-actions' },
+        L.el('button', { class: 'btn btn--sm', type: 'button', 'data-local': id, text: 'OPEN LOCAL' }),
+        L.el('button', { class: 'btn btn--sm', type: 'button', 'data-live': item.url || '', text: 'OPEN LIVE' })));
+
+    return L.el('article', { class: 'arc' }, thumb, body);
+  }
+
+  function render(items) {
+    var host = $('#arcGrid');
+    host.replaceChildren();
+    $('#archiveCount').textContent = L.fmtInt(items.length);
+    $('#archiveMeta').textContent = L.fmtInt(items.length) + ' ITEMS';
+    $('#arcEmpty').hidden = items.length > 0;
+
+    if (!items.length) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    var frag = document.createDocumentFragment();
+    items.forEach(function (item) { frag.append(card(item)); });
+    host.append(frag);
+  }
+
+  document.addEventListener('click', function (ev) {
+    var node = ev.target;
+    var local = node && node.closest ? node.closest('[data-local]') : null;
+    if (local) {
+      window.open('/archive/' + encodeURIComponent(local.dataset.local) + '/page.html', '_blank', 'noopener');
+      return;
+    }
+    var live = node && node.closest ? node.closest('[data-live]') : null;
+    if (live && live.dataset.live) L.openUrl(live.dataset.live);
+  });
+
+  function load() {
+    L.api('/api/archive', { silent: true })
+      .then(function (data) {
+        var items = data && Array.isArray(data.items) ? data.items : [];
+        items = items.slice().sort(function (a, b) {
+          return String(b.at || '').localeCompare(String(a.at || ''));
+        });
+        render(items);
+      })
+      .catch(function () {
+        render([]);
+        var note = $('#arcEmpty');
+        if (note) {
+          note.replaceChildren(
+            L.el('b', { text: 'Archive offline — start the LYGO Browser.' }),
+            L.el('a', { class: 'link', href: 'bible.html', text: 'OPEN THE BIBLE' }));
+        }
+      });
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

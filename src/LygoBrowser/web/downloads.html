@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Downloads</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="download"><i class="dot"></i><span class="k">FILES</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+        <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html" aria-current="page">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta"><span>LOCAL FILES</span><span class="sep"></span><span id="dlMeta">— ITEMS</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <h1 class="cap">DOWNLOADS <span class="cap-n" id="dlCount">—</span></h1>
+  <p class="hint">Files the browser saved. Every download also lands in the Bible as a record, so the source page
+    is never lost — a file without its origin is an orphan.</p>
+
+  <div class="listbar">
+    <button class="btn" type="button" id="dlRefresh">REFRESH</button>
+    <button class="btn" type="button" id="dlOpenDir">OPEN DOWNLOAD FOLDER</button>
+    <span class="hint" id="dlDir">—</span>
+  </div>
+
+  <div class="panel">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th scope="col">STATE</th>
+            <th scope="col">FILE</th>
+            <th scope="col">SOURCE</th>
+            <th scope="col">SIZE</th>
+            <th scope="col">STARTED</th>
+            <th scope="col" class="ta-r">ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="dlRows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="dlEmpty">
+      <b>Nothing downloaded yet</b>
+      Download something in the browser and it will appear here with its source URL.
+    </div>
+  </div>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+  var state = { items: [] };
+
+  function baseName(p) {
+    var s = String(p || '');
+    var i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
+    return i >= 0 ? s.slice(i + 1) : s;
+  }
+
+  function stateDot(s) {
+    if (s === 'completed') return 'dot--ok';
+    if (s === 'in-progress') return 'dot--wait';
+    if (s === 'interrupted') return 'dot--bad';
+    return '';
+  }
+
+  function row(d) {
+    var name = baseName(d.path);
+    return L.el('tr', {},
+      L.el('td', {}, L.el('span', { class: 'chip' },
+        L.el('span', { class: 'dot ' + stateDot(d.state) }),
+        L.el('span', { class: 'mono dim', text: String(d.state || '').toUpperCase() }))),
+      L.el('td', {}, L.el('span', { class: 'cell-label', title: d.path || '', text: name || '—' })),
+      L.el('td', {}, L.el('span', { class: 'mono trunc cell-url', title: d.url || '', text: L.domain(d.url) || '—' })),
+      L.el('td', { class: 'mono dim', text: L.fmtBytes(d.bytes || d.total || 0) }),
+      L.el('td', { class: 'mono dim', text: L.fmtDate(d.started) }),
+      L.el('td', { class: 'ta-r' },
+        L.el('button', { class: 'btn btn--sm', type: 'button', 'data-open': d.path || '', text: 'OPEN' })));
+  }
+
+  function render(items) {
+    state.items = items;
+    var body = $('#dlRows');
+    var frag = document.createDocumentFragment();
+    items.slice().reverse().forEach(function (d) { frag.append(row(d)); });
+    body.replaceChildren(frag);
+    $('#dlCount').textContent = L.fmtInt(items.length);
+    $('#dlMeta').textContent = L.fmtInt(items.length) + ' ITEMS';
+    $('#dlEmpty').hidden = items.length > 0;
+    if (L.pills) L.pills.set('download', L.fmtInt(items.length), 'idle');
+  }
+
+  function load() {
+    L.api('/api/downloads', { silent: true })
+      .then(function (d) { render((d && d.items) || []); })
+      .catch(function () { render([]); });
+    L.api('/api/settings', { silent: true })
+      .then(function (s) {
+        if (s && s.downloadDir) $('#dlDir').textContent = s.downloadDir;
+        else if (s) $('#dlDir').textContent = 'default: %USERPROFILE%\\Downloads\\LYGO Browser';
+      })
+      .catch(function () {});
+  }
+
+  $('#dlRows').addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button[data-open]') : null;
+    if (!btn || !btn.dataset.open) return;
+    var path = btn.dataset.open.replace(/\\/g, '/');
+    L.openUrl('file:///' + path);
+  });
+
+  $('#dlRefresh').addEventListener('click', load);
+  $('#dlOpenDir').addEventListener('click', function () {
+    L.api('/api/settings', { silent: true }).then(function (s) {
+      var dir = (s && s.downloadDir) || '';
+      if (!dir) { L.toast('Set a download folder in Settings', 'err'); return; }
+      var url = 'file:///' + dir.replace(/\\/g, '/');
+      L.openUrl(url);
+    });
+  });
+
+  load();
+  setInterval(load, 4000);
+})();
+</script>
+</body>
+</html>

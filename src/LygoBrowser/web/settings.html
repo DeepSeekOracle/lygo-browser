@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Settings</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="cdp"><i class="dot"></i><span class="k">CDP</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+        <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html" aria-current="page">SETTINGS</a>
+      </nav>
+      <div class="head-meta"><span>LOCAL CONFIG</span><span class="sep"></span><span id="setState">UNSAVED</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <h1 class="cap">SETTINGS</h1>
+  <p class="hint">Stored in <span class="mono">data\state\settings.json</span>. Changes apply to new tabs and
+    survive a restart; the engine is reused, not restarted.</p>
+
+  <div class="dash-grid">
+    <section class="panel">
+      <div class="panel-h"><span>BROWSER</span><span class="cap-n">GENERAL</span></div>
+      <form class="form" id="setForm" autocomplete="off">
+
+        <div class="f">
+          <label for="sHome">HOMEPAGE</label>
+          <input class="inp" id="sHome" type="text" spellcheck="false" placeholder="http://127.0.0.1:9337/">
+        </div>
+
+        <div class="f">
+          <label for="sEngine">DEFAULT SEARCH</label>
+          <select class="sel inp" id="sEngine">
+            <option value="google">Google</option>
+            <option value="ddg">DuckDuckGo</option>
+            <option value="brave">Brave Search</option>
+            <option value="bible">Bookmark Bible only</option>
+          </select>
+        </div>
+
+        <div class="f">
+          <label for="sDownload">DOWNLOAD FOLDER</label>
+          <input class="inp" id="sDownload" type="text" spellcheck="false"
+                 placeholder="%USERPROFILE%\Downloads\LYGO Browser (leave blank for default)">
+        </div>
+
+        <div class="f">
+          <label>TAB SESSION</label>
+          <label class="f" style="display:flex;align-items:center;gap:9px;flex-direction:row"><input type="checkbox" id="sRestore"> <span>Restore my tabs on start</span></label>
+        </div>
+
+        <div class="f">
+          <label>BROWSING</label>
+          <label class="f" style="display:flex;align-items:center;gap:9px;flex-direction:row"><input type="checkbox" id="sSpell"> <span>Spellcheck text fields</span></label>
+          <label class="f mt-s" style="display:flex;align-items:center;gap:9px;flex-direction:row"><input type="checkbox" id="sAskDownload"> <span>Ask before saving a download</span></label>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn--gold" type="submit">SAVE SETTINGS</button>
+          <button class="btn" type="button" id="sReset">RESET TO DEFAULTS</button>
+        </div>
+        <p class="warn mt-s">Password autofill is manual by design: the vault fills only when you press
+          FILL, and only into a tab whose host matches the credential.</p>
+      </form>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-h"><span>ENGINE</span><span class="cap-n">LIVE</span></div>
+            <div class="kv"><span class="kv-k">ENGINE</span><span class="kv-v" id="hEngine">—</span></div>
+      <div class="kv"><span class="kv-k">BRIDGE</span><span class="kv-v" id="hBridge">—</span></div>
+      <div class="kv"><span class="kv-k">CDP</span><span class="kv-v" id="hCdp">—</span></div>
+      <div class="kv"><span class="kv-k">RECORDS</span><span class="kv-v" id="hRecords">—</span></div>
+      <div class="kv"><span class="kv-k">ARCHIVED</span><span class="kv-v" id="hArchived">—</span></div>
+      <div class="kv"><span class="kv-k">VISITS</span><span class="kv-v" id="hHistory">—</span></div>
+      <div class="kv"><span class="kv-k">VAULT</span><span class="kv-v" id="hVault">—</span></div>
+      <div class="kv"><span class="kv-k">ROOT</span><span class="kv-v mono trunc" id="hRoot">—</span></div>
+      <p class="hint mt-s">Agent surface: HTTP :9337 (token in
+        <span class="mono">data\state\bridge.token</span>) and CDP :9333 for Playwright, Puppeteer and browser-use.</p>
+    </aside>
+    <aside class="panel" id="cookiePanel">
+      <div class="panel-h"><span>COOKIES</span><span class="cap-n">CHROMIUM JAR</span></div>
+      <p class="hint">Cookies live in <span class="mono">data\profile</span> and keep your logins between runs.
+        Clearing removes every site cookie and signs you out everywhere.</p>
+      <p class="mono" id="cookieCount">— cookies</p>
+      <div class="form-actions">
+        <button class="btn" type="button" id="cookieRefresh">REFRESH</button>
+        <button class="btn btn--danger" type="button" id="cookieClear">CLEAR ALL COOKIES</button>
+      </div>
+      <p class="warn mt-s">Two clicks to clear. The jar itself is Chromium's; this is the control, not a reimplementation.</p>
+    </aside>
+  </div>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  function apply(s) {
+    $('#sHome').value = s.homepage || '';
+    $('#sEngine').value = s.searchEngine || 'google';
+    $('#sDownload').value = s.downloadDir || '';
+    $('#sRestore').checked = s.restoreSession !== false;
+    $('#sSpell').checked = s.spellcheck !== false;
+    $('#sAskDownload').checked = !!s.askBeforeDownload;
+    $('#setState').textContent = 'LOADED';
+  }
+
+  function load() {
+    L.api('/api/settings', { silent: true }).then(apply).catch(function () {
+      L.toast('Settings offline', 'err');
+    });
+    L.api('/api/health', { silent: true }).then(function (h) {
+      $('#hEngine').textContent = h.engine || '—';
+      $('#hBridge').textContent = ':' + (h.bridge || '');
+      $('#hCdp').textContent = ':' + (h.cdp || '');
+      $('#hRecords').textContent = L.fmtInt(h.recordCount || 0);
+      $('#hArchived').textContent = L.fmtInt(h.archiveCount || 0);
+      $('#hHistory').textContent = L.fmtInt(h.historyCount || 0);
+      $('#hVault').textContent = L.fmtInt(h.vaultCount || 0);
+      $('#hRoot').textContent = h.root || '—';
+      $('#hRoot').title = h.root || '';
+    }).catch(function () {});
+  }
+
+  $('#setForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var body = {
+      homepage: $('#sHome').value.trim() || 'http://127.0.0.1:9337/',
+      searchEngine: $('#sEngine').value,
+      downloadDir: $('#sDownload').value.trim(),
+      restoreSession: $('#sRestore').checked,
+      spellcheck: $('#sSpell').checked,
+      askBeforeDownload: $('#sAskDownload').checked
+    };
+    L.api('/api/settings', { method: 'POST', body: body })
+      .then(function (r) {
+        if (!r || !r.ok) { L.toast('Save failed', 'err'); return; }
+        L.toast('Settings saved', 'ok');
+        $('#setState').textContent = 'SAVED';
+        apply(r.settings || body);
+      });
+  });
+
+  $('#sReset').addEventListener('click', function () {
+    apply({
+      homepage: 'http://127.0.0.1:9337/', searchEngine: 'google', downloadDir: '',
+      restoreSession: true, spellcheck: true, askBeforeDownload: false
+    });
+    $('#setState').textContent = 'UNSAVED';
+    L.toast('Defaults loaded — press SAVE to apply', 'info');
+  });
+
+
+  function cookieCount() {
+    L.api('/api/cookies', { silent: true }).then(function (d) {
+      $('#cookieCount').textContent = L.fmtInt((d && d.count) || 0) + ' cookies';
+    }).catch(function () { $('#cookieCount').textContent = 'offline'; });
+  }
+  $('#cookieRefresh').addEventListener('click', cookieCount);
+  $('#cookieClear').addEventListener('click', function () {
+    var b = this;
+    if (b.dataset.armed !== '1') {
+      b.dataset.armed = '1'; b.textContent = 'CLICK AGAIN TO CLEAR';
+      setTimeout(function () { b.dataset.armed = '0'; b.textContent = 'CLEAR ALL COOKIES'; }, 4000);
+      return;
+    }
+    L.api('/api/cookies/clear', { method: 'POST', body: {} }).then(function () {
+      L.toast('All cookies cleared', 'ok'); cookieCount();
+    });
+  });
+  cookieCount();
+
+  load();
+})();
+</script>
+</body>
+</html>

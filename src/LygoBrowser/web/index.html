@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Dashboard</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="cdp"><i class="dot"></i><span class="k">CDP</span><span class="v">—</span></span>
+        <span class="pill" data-pill="archive"><i class="dot"></i><span class="k">ARCHIVE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="vault"><i class="dot"></i><span class="k">VAULT</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html" aria-current="page">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+              <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta">
+        <span>127.0.0.1:9337</span>
+        <span class="sep"></span>
+        <span class="hot">LOCAL</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <section class="hero" aria-labelledby="searchLabel">
+    <h1 class="sr-only" id="searchLabel">Search the Bible, or enter a URL</h1>
+    <form class="searchbox" id="searchForm" autocomplete="off" role="search">
+      <input class="search-input" id="searchInput" type="text" spellcheck="false"
+             placeholder="Search the Bible, or enter a URL"
+             aria-label="Search the Bible, or enter a URL"
+             aria-controls="suggest" aria-expanded="false">
+      <button class="btn btn--gold search-go" id="searchGo" type="submit">OPEN</button>
+      <div class="suggest" id="suggest" aria-label="Bible results" hidden></div>
+    </form>
+    <p class="hero-hint" id="heroHint">Enter opens a URL · Enter searches the Bible · Esc clears</p>
+  </section>
+
+  <div class="dash-grid">
+    <div class="dash-main">
+
+      <section aria-labelledby="foldersCap">
+        <h2 class="cap" id="foldersCap">FOLDERS <span class="cap-n" id="foldersMeta">—</span></h2>
+        <div class="folders" id="folders"></div>
+        <div class="empty" id="foldersEmpty" hidden>
+          <b>No folders loaded</b>
+          Start the LYGO Browser bridge, then reload this page.
+        </div>
+      </section>
+
+      <section aria-labelledby="recentCap">
+        <h2 class="cap" id="recentCap">RECENTLY ADDED <span class="cap-n">8 NEWEST</span></h2>
+        <div class="recent" id="recent"></div>
+      </section>
+
+      <section aria-labelledby="quickCap">
+        <h2 class="cap" id="quickCap">QUICK LAUNCH <span class="cap-n">HAND OFF TO THE BROWSER</span></h2>
+        <div class="quick">
+          <button class="btn" type="button" data-open="https://web.archive.org/">WAYBACK</button>
+          <button class="btn" type="button" data-open="https://archive.ph/">ARCHIVE.TODAY</button>
+          <button class="btn" type="button" data-open="https://www.google.com/">GOOGLE</button>
+          <button class="btn" type="button" data-open="https://moltx.io/">MOLTX</button>
+          <button class="btn" type="button" data-open="https://clawhub.ai/">CLAWHUB</button>
+          <button class="btn" type="button" data-open="https://github.com/">GITHUB</button>
+          <button class="btn" type="button" data-open="https://huggingface.co/">HUGGING FACE</button>
+        </div>
+      </section>
+
+    </div>
+
+    <aside class="dash-rail" aria-label="System">
+
+      <section class="panel" aria-labelledby="sysCap">
+        <div class="panel-h"><span id="sysCap">SYSTEM</span><span class="cap-n" id="sysState">WAITING</span></div>
+        <div class="panel-b">
+          <div class="kv"><span class="kv-k">ENGINE</span><span class="kv-v" id="sysEngine">—</span></div>
+          <div class="kv"><span class="kv-k">CDP PORT</span><span class="kv-v hot" id="sysCdp">—</span></div>
+          <div class="kv"><span class="kv-k">RECORDS</span><span class="kv-v" id="sysRecords">—</span></div>
+          <div class="kv"><span class="kv-k">DOMAINS</span><span class="kv-v" id="sysDomains">—</span></div>
+          <div class="kv"><span class="kv-k">ARCHIVED</span><span class="kv-v" id="sysArchived">—</span></div>
+          <div class="kv"><span class="kv-k">TABS</span><span class="kv-v" id="sysTabs">—</span></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="agentCap">
+        <div class="panel-h"><span id="agentCap">AGENT</span><span class="cap-n">ONE-LINER</span></div>
+        <div class="panel-b">
+          <p class="hint">Any agent on this machine can read the bridge with:</p>
+          <div class="oneline" id="agentLine">curl http://127.0.0.1:9337/api/health</div>
+          <button class="btn btn--sm" type="button" id="copyLine">COPY</button>
+        </div>
+      </section>
+
+    </aside>
+  </div>
+
+  <section class="addbar" aria-labelledby="addCap">
+    <h2 class="cap" id="addCap">ADD A LINK <span class="cap-n">FILED INTO THE BIBLE</span></h2>
+    <form class="addbar-form" id="addForm" autocomplete="off">
+      <div class="f addbar-url">
+        <label for="addUrl">URL</label>
+        <input class="inp" id="addUrl" name="url" type="text" spellcheck="false"
+               placeholder="https://example.com" required>
+      </div>
+      <div class="f">
+        <label for="addTitle">TITLE</label>
+        <input class="inp" id="addTitle" name="title" type="text" placeholder="Optional">
+      </div>
+      <div class="f">
+        <label for="addFolder">FOLDER</label>
+        <select class="sel" id="addFolder" name="folder"></select>
+      </div>
+      <button class="btn btn--gold" type="submit" id="addBtn">ADD</button>
+    </form>
+  </section>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  var state = { folders: [], records: [], hits: [], seq: 0, online: false };
+  var input = $('#searchInput');
+  var form = $('#searchForm');
+  var suggest = $('#suggest');
+  var hint = $('#heroHint');
+
+  /* ---- search / open --------------------------------------------------- */
+
+  function isUrlLike(value) {
+    var s = String(value || '').trim();
+    if (!s || /\s/.test(s)) return false;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return true;
+    if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(s)) return true;
+    return /^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#].*)?$/i.test(s);
+  }
+
+  function withScheme(value) {
+    var s = String(value || '').trim();
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return s;
+    if (/^(localhost|127\.0\.0\.1|\[::1\])/i.test(s)) return 'http://' + s;
+    return 'https://' + s;
+  }
+
+  function folderName(id) {
+    for (var i = 0; i < state.folders.length; i += 1) {
+      if (state.folders[i].id === id) return state.folders[i].name || id;
+    }
+    return id || 'UNFILED';
+  }
+
+  function folderCounts() {
+    var map = {};
+    state.records.forEach(function (rec) {
+      map[rec.folder] = (map[rec.folder] || 0) + 1;
+    });
+    return map;
+  }
+
+  function hideSuggest() {
+    suggest.hidden = true;
+    suggest.replaceChildren();
+    input.setAttribute('aria-expanded', 'false');
+  }
+
+  function localHits(q) {
+    var needle = q.toLowerCase();
+    return state.records.filter(function (rec) {
+      return String(rec.title || '').toLowerCase().indexOf(needle) !== -1 ||
+        String(rec.url || '').toLowerCase().indexOf(needle) !== -1 ||
+        (rec.tags || []).join(' ').toLowerCase().indexOf(needle) !== -1;
+    }).slice(0, 12);
+  }
+
+  function renderHits(q, local) {
+    suggest.replaceChildren();
+    if (!state.hits.length) {
+      suggest.append(L.el('div', { class: 'sug-empty', text: 'No Bible matches for "' + q + '"' }));
+      suggest.append(L.el('div', { class: 'sug-foot', text: 'Enter searches the Bible · click a hit to open it' }));
+    } else {
+      var frag = document.createDocumentFragment();
+      state.hits.slice(0, 12).forEach(function (rec) {
+        frag.append(L.el('button', { class: 'hit', type: 'button', 'data-id': rec.id, title: rec.url || '' },
+          L.el('span', { class: 'hit-t', text: rec.title || rec.url || rec.id }),
+          L.el('span', { class: 'hit-go', text: 'BIBLE' }),
+          L.el('span', {
+            class: 'hit-d',
+            text: (L.domain(rec.url) || 'local') + ' · ' + folderName(rec.folder)
+          })));
+      });
+      frag.append(L.el('div', {
+        class: 'sug-foot',
+        text: local ? 'Bridge offline · local matches · Enter searches the Bible' : 'Enter searches the Bible · click a hit to open it'
+      }));
+      suggest.append(frag);
+    }
+    suggest.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function runSearch() {
+    var q = input.value.trim();
+    if (q.length < 2) {
+      state.seq += 1;
+      hideSuggest();
+      return;
+    }
+    var seq = state.seq += 1;
+    L.api('/api/bible/search?q=' + encodeURIComponent(q) + '&limit=12', { silent: true })
+      .then(function (data) {
+        if (seq !== state.seq) return;
+        state.hits = data && Array.isArray(data.hits) ? data.hits : [];
+        renderHits(q, false);
+      })
+      .catch(function () {
+        if (seq !== state.seq) return;
+        state.hits = localHits(q);
+        renderHits(q, true);
+      });
+  }
+
+  var debouncedSearch = L.debounce(runSearch, 180);
+
+  function setHint() {
+    var v = input.value.trim();
+    hint.textContent = v && isUrlLike(v)
+      ? 'Enter opens ' + withScheme(v)
+      : 'Enter opens a URL · Enter searches the Bible · Esc clears';
+    $('#searchGo').textContent = v && !isUrlLike(v) ? 'SEARCH' : 'OPEN';
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var q = input.value.trim();
+    if (!q) { input.focus(); return; }
+    if (isUrlLike(q)) {
+      hideSuggest();
+      L.openUrl(withScheme(q));
+      return;
+    }
+    window.location.href = 'bible.html?q=' + encodeURIComponent(q);
+  });
+
+  input.addEventListener('input', function () {
+    setHint();
+    if (!input.value.trim()) { state.seq += 1; hideSuggest(); }
+    debouncedSearch();
+  });
+
+  input.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') {
+      hideSuggest();
+      input.blur();
+    } else if (ev.key === 'ArrowDown' && !suggest.hidden) {
+      var first = suggest.querySelector('.hit');
+      if (first) { ev.preventDefault(); first.focus(); }
+    }
+  });
+
+  suggest.addEventListener('click', function (ev) {
+    var hit = ev.target && ev.target.closest ? ev.target.closest('.hit') : null;
+    if (!hit) return;
+    window.location.href = 'bible.html?id=' + encodeURIComponent(hit.dataset.id);
+  });
+
+  document.addEventListener('click', function (ev) {
+    if (suggest.hidden) return;
+    if (suggest.contains(ev.target) || form.contains(ev.target)) return;
+    hideSuggest();
+  });
+
+  /* ---- folder tiles ---------------------------------------------------- */
+
+  function renderFolders() {
+    var host = $('#folders');
+    var counts = folderCounts();
+    host.replaceChildren();
+    if (!state.folders.length) {
+      host.hidden = true;
+      var box = $('#foldersEmpty');
+      box.hidden = false;
+      box.replaceChildren(
+        L.el('b', { text: state.online ? 'No folders in the Bible' : 'No folders loaded' }),
+        state.online
+          ? 'The store returned no folders. Add a link below; it files into 09 · QUEUE.'
+          : 'Start the LYGO Browser bridge, then reload this page.');
+      $('#foldersMeta').textContent = '0';
+      return;
+    }
+    host.hidden = false;
+    $('#foldersEmpty').hidden = true;
+    $('#foldersMeta').textContent = String(state.folders.length);
+    var frag = document.createDocumentFragment();
+    state.folders.forEach(function (folder) {
+      frag.append(L.el('button', {
+        class: 'folder', type: 'button', 'data-folder': folder.id,
+        title: folder.desc || folder.name || folder.id
+      },
+        L.el('span', { class: 'folder-top' },
+          L.el('span', { class: 'folder-name', text: folder.name || folder.id }),
+          L.el('span', { class: 'folder-count', text: L.fmtInt(counts[folder.id] || 0) })),
+        L.el('span', { class: 'folder-desc', text: folder.desc || '' })));
+    });
+    host.append(frag);
+  }
+
+  $('#folders').addEventListener('click', function (ev) {
+    var tile = ev.target && ev.target.closest ? ev.target.closest('[data-folder]') : null;
+    if (tile) window.location.href = 'bible.html?folder=' + encodeURIComponent(tile.dataset.folder);
+  });
+
+  /* ---- recently added -------------------------------------------------- */
+
+  function recentRow(rec) {
+    var archived = !!(rec.archived && rec.archived.at);
+    var meta = L.el('div', { class: 'r-meta' },
+      L.el('span', { class: 'chip chip--gold', title: folderName(rec.folder), text: folderName(rec.folder) }));
+    if (archived) meta.append(L.el('span', { class: 'tick-label' }, L.el('span', { class: 'tick' }), 'ARCHIVED'));
+    meta.append(L.el('span', { class: 'dom', text: L.domain(rec.url) || rec.url || '' }));
+
+    var action = archived
+      ? L.el('button', { class: 'btn btn--sm is-done', type: 'button', disabled: true, text: 'ARCHIVED' })
+      : L.el('button', { class: 'btn btn--sm', type: 'button', 'data-archive': rec.id, text: 'ARCHIVE' });
+
+    return L.el('div', { class: 'rrow', 'data-id': rec.id },
+      L.el('div', { class: 'r-main' }, meta,
+        L.el('div', { class: 'r-title', title: rec.title || rec.url || '', text: rec.title || rec.url || rec.id })),
+      action);
+  }
+
+  function renderRecent() {
+    var host = $('#recent');
+    host.replaceChildren();
+    var recs = state.records.slice().sort(function (a, b) {
+      return String(b.added || '').localeCompare(String(a.added || ''));
+    }).slice(0, 8);
+    if (!recs.length) {
+      host.append(L.empty('No records yet', state.online
+        ? 'Add a link below, or import a Bible export.'
+        : 'The Bible bridge is offline. Start the LYGO Browser.'));
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    recs.forEach(function (rec) { frag.append(recentRow(rec)); });
+    host.append(frag);
+  }
+
+  $('#recent').addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('[data-archive]') : null;
+    if (!btn || btn.disabled) return;
+    var id = btn.dataset.archive;
+    btn.disabled = true;
+    btn.textContent = 'WORKING';
+    L.api('/api/bible/archive', { method: 'POST', body: { id: id } })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Archive failed', 'err');
+          btn.disabled = false;
+          btn.textContent = 'ARCHIVE';
+          return;
+        }
+        var rec = null;
+        for (var i = 0; i < state.records.length; i += 1) {
+          if (state.records[i].id === id) { rec = state.records[i]; break; }
+        }
+        if (rec) {
+          rec.archived = Object.assign({}, rec.archived, {
+            at: new Date().toISOString(),
+            shot: '/archive/' + id + '/shot.png',
+            md: '/archive/' + id + '/page.md',
+            html: '/archive/' + id + '/page.html',
+            bytes: res.bytes !== undefined && res.bytes !== null ? res.bytes : (rec.archived && rec.archived.bytes) || 0,
+            sha256: (res && res.sha256) || (rec.archived && rec.archived.sha256) || null
+          });
+        }
+        btn.textContent = 'ARCHIVED';
+        btn.classList.add('is-done');
+        var row = btn.closest('.rrow');
+        var meta = row && row.querySelector('.r-meta');
+        if (meta && !meta.querySelector('.tick')) {
+          meta.append(L.el('span', { class: 'tick-label' }, L.el('span', { class: 'tick' }), 'ARCHIVED'));
+        }
+        L.toast('Archived' + (res && res.sha256 ? ' · ' + String(res.sha256).slice(0, 12) : ''), 'ok');
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'ARCHIVE';
+      });
+  });
+
+  /* ---- system ---------------------------------------------------------- */
+
+  function setText(sel, value) {
+    var node = $(sel);
+    if (node) node.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+  }
+
+  function loadSystem() {
+    return Promise.all([
+      L.getHealth(),
+      L.api('/api/bible/stats', { silent: true }).catch(function () { return null; }),
+      L.api('/api/agent/status', { silent: true }).catch(function () { return null; })
+    ]).then(function (out) {
+      var h = out[0];
+      var s = out[1];
+      var a = out[2];
+      setText('#sysEngine', (h && h.engine) || (a && a.engine) || '—');
+      setText('#sysCdp', a && a.cdpPort ? ':' + a.cdpPort
+        : h && h.cdp ? (typeof h.cdp === 'number' ? ':' + h.cdp : String(h.cdp)) : '—');
+      setText('#sysRecords', s && s.records !== undefined ? L.fmtInt(s.records)
+        : h ? L.fmtInt(h.recordCount) : '—');
+      setText('#sysDomains', s && s.domains !== undefined ? L.fmtInt(s.domains) : '—');
+      setText('#sysArchived', s && s.archived !== undefined ? L.fmtInt(s.archived)
+        : h ? L.fmtInt(h.archiveCount) : '—');
+      setText('#sysTabs', a && Array.isArray(a.tabs) ? L.fmtInt(a.tabs.length) : '—');
+      setText('#sysState', h ? 'LIVE' : 'OFFLINE');
+    });
+  }
+
+  /* ---- bible load + add strip ----------------------------------------- */
+
+  function deriveFolders() {
+    if (state.folders.length || !state.records.length) return;
+    var seen = {};
+    state.records.forEach(function (rec) {
+      var id = rec.folder || 'UNFILED';
+      if (!seen[id]) {
+        seen[id] = true;
+        state.folders.push({ id: id, name: id, desc: '' });
+      }
+    });
+  }
+
+  function loadBible() {
+    return L.api('/api/bible', { silent: true })
+      .then(function (data) {
+        state.folders = data && Array.isArray(data.folders) ? data.folders : [];
+        state.records = data && Array.isArray(data.records) ? data.records : [];
+        state.online = true;
+      })
+      .catch(function () {
+        state.folders = [];
+        state.records = [];
+        state.online = false;
+      })
+      .then(function () {
+        deriveFolders();
+        renderFolders();
+        renderRecent();
+        fillAddFolders();
+      });
+  }
+
+  function fillAddFolders() {
+    var sel = $('#addFolder');
+    sel.replaceChildren();
+    if (!state.folders.length) {
+      sel.append(L.el('option', { value: '', text: 'NO FOLDERS' }));
+      sel.disabled = true;
+      $('#addBtn').disabled = true;
+      return;
+    }
+    state.folders.forEach(function (folder) {
+      sel.append(L.el('option', { value: folder.id, text: folder.name || folder.id }));
+    });
+    sel.disabled = false;
+    $('#addBtn').disabled = false;
+  }
+
+  $('#addForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var url = $('#addUrl').value.trim();
+    if (!url) { $('#addUrl').focus(); return; }
+    var folder = $('#addFolder').value;
+    var body = {
+      url: withScheme(url),
+      title: $('#addTitle').value.trim(),
+      folder: folder,
+      tags: '',
+      note: ''
+    };
+    var btn = $('#addBtn');
+    btn.disabled = true;
+    btn.textContent = 'ADDING';
+    L.api('/api/bible/add', { method: 'POST', body: body })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Add failed', 'err');
+          return;
+        }
+        var status = res.status || 'added';
+        var label = (res.record && res.record.title) || body.title || L.domain(body.url) || body.url;
+        if (status === 'dupe') L.toast('Already in the Bible · ' + label, 'info');
+        else if (status === 'updated') L.toast('Existing record updated · ' + label, 'ok');
+        else L.toast('Added · ' + label, 'ok');
+        $('#addUrl').value = '';
+        $('#addTitle').value = '';
+        return loadBible().then(function () {
+          var sel = $('#addFolder');
+          for (var i = 0; i < sel.options.length; i += 1) {
+            if (sel.options[i].value === folder) { sel.value = folder; break; }
+          }
+        });
+      })
+      .catch(function () { /* api() already reported it */ })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = 'ADD';
+      });
+  });
+
+  /* ---- quick launch + one-liner --------------------------------------- */
+
+  document.addEventListener('click', function (ev) {
+    var node = ev.target && ev.target.closest ? ev.target.closest('[data-open]') : null;
+    if (node) L.openUrl(node.getAttribute('data-open'));
+  });
+
+  $('#copyLine').addEventListener('click', function () {
+    L.copy($('#agentLine').textContent).then(function (ok) {
+      L.toast(ok ? 'One-liner copied' : 'Copy blocked by the host', ok ? 'ok' : 'err');
+    });
+  });
+
+  /* ---- boot ------------------------------------------------------------ */
+
+  function init() {
+    setHint();
+    loadBible();
+    loadSystem();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Shot Vault</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+<style>
+  .day { margin: 18px 0 8px; display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .day b { font: 600 10px/1 var(--mono); letter-spacing: .18em; color: var(--gold); }
+  .day span { font: 400 9.5px/1 var(--mono); color: var(--muted); }
+  .shot { border: 1px solid var(--line); background: var(--panel); border-radius: 3px; overflow: hidden; }
+  .shot img { display: block; width: 100%; height: 150px; object-fit: cover; object-position: top center; background: #0a0f14; cursor: zoom-in; }
+  .shot .b { padding: 8px 9px; }
+  .shot .t { font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shot .m { margin-top: 5px; display: flex; justify-content: space-between; font: 400 9.5px/1.3 var(--mono); color: var(--muted); }
+  .shot .a { margin-top: 8px; display: flex; gap: 5px; }
+  .snapgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .empty-big { padding: 40px 20px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body class="doc">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="Status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="snaps"><i class="dot"></i><span class="k">SHOTS</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+        <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html" aria-current="page">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta"><span>SHOT VAULT</span><span class="sep"></span><span id="snapMeta">—</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <h1 class="cap">SHOT VAULT <span class="cap-n" id="snapCount">—</span></h1>
+  <p class="hint">Every snap is filed by day under <span class="mono">data\vault\screenshots\YYYY-MM-DD\</span>
+    with a thumbnail and a ledger entry. The camera button (or Ctrl+Shift+S) takes the view; Shift-click
+    takes the whole page.</p>
+
+  <div class="listbar">
+    <button class="btn btn--gold" type="button" id="snapView">SNAP THIS TAB</button>
+    <button class="btn" type="button" id="snapFull">SNAP FULL PAGE</button>
+    <input class="inp" id="snapQ" type="search" placeholder="Filter by title or URL…" spellcheck="false">
+    <button class="btn" type="button" id="snapRefresh">REFRESH</button>
+  </div>
+
+  <div id="snapBody"></div>
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+  var state = { items: [] };
+
+  function dayOf(entry) {
+    var f = String(entry.file || '');
+    var i = f.indexOf('/');
+    return i > 0 ? f.slice(0, i) : 'undated';
+  }
+
+  function card(s) {
+    var img = L.el('img', { src: '/shots/' + s.thumb, alt: '', loading: 'lazy', title: 'Open full size' });
+    img.addEventListener('click', function () { L.openUrl('/shots/' + s.file); });
+    img.addEventListener('error', function () { img.src = '/shots/' + s.file; }, { once: true });
+    return L.el('div', { class: 'shot' },
+      img,
+      L.el('div', { class: 'b' },
+        L.el('div', { class: 't', title: s.title || '', text: s.title || s.url || s.id }),
+        L.el('div', { class: 'm' },
+          L.el('span', { text: (s.w || 0) + '×' + (s.h || 0) + ' · ' + L.fmtBytes(s.bytes || 0) }),
+          L.el('span', { text: String(s.mode || '').toUpperCase() })),
+        L.el('div', { class: 'a' },
+          L.el('button', { class: 'btn btn--sm', type: 'button', 'data-open': s.file, text: 'OPEN' }),
+          L.el('button', { class: 'btn btn--sm', type: 'button', 'data-bible': s.url || '', text: 'BIBLE' }),
+          L.el('button', { class: 'btn btn--sm btn--danger', type: 'button', 'data-del': s.id, text: 'DELETE' }))));
+  }
+
+  function render(items, filter) {
+    var q = (filter || '').toLowerCase();
+    if (q) {
+      items = items.filter(function (s) {
+        return ((s.title || '') + ' ' + (s.url || '')).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    state.items = items;
+    var body = $('#snapBody');
+    body.replaceChildren();
+    $('#snapCount').textContent = L.fmtInt(items.length);
+    $('#snapMeta').textContent = L.fmtInt(items.length) + ' SHOTS';
+    if (L.pills) L.pills.set('snaps', L.fmtInt(items.length), 'idle');
+    if (!items.length) {
+      body.append(L.el('div', { class: 'empty-big', text: 'No snaps yet — press SNAP THIS TAB.' }));
+      return;
+    }
+    var byDay = {};
+    items.forEach(function (s) { (byDay[dayOf(s)] = byDay[dayOf(s)] || []).push(s); });
+    Object.keys(byDay).sort().reverse().forEach(function (day) {
+      var head = L.el('div', { class: 'day' },
+        L.el('b', { text: day }),
+        L.el('span', { text: byDay[day].length + ' shot' + (byDay[day].length === 1 ? '' : 's') }));
+      var grid = L.el('div', { class: 'snapgrid' });
+      byDay[day].forEach(function (s) { grid.append(card(s)); });
+      body.append(head, grid);
+    });
+  }
+
+  function load() {
+    L.api('/api/snaps', { silent: true })
+      .then(function (d) { render((d && d.items) || [], $('#snapQ').value); })
+      .catch(function () { render([], ''); });
+  }
+
+  function snap(mode) {
+    L.toast('Taking ' + mode + ' snap…', 'info');
+    L.api('/api/snap', { method: 'POST', body: { mode: mode }, silent: true })
+      .then(function (r) {
+        if (!r || !r.ok) { L.toast((r && r.error) || 'Snap failed', 'err'); return; }
+        L.toast('Saved · ' + r.entry.w + '×' + r.entry.h, 'ok');
+        load();
+      })
+      .catch(function () { L.toast('Snap failed', 'err'); });
+  }
+
+  $('#snapView').addEventListener('click', function () { snap('viewport'); });
+  $('#snapFull').addEventListener('click', function () { snap('full'); });
+  $('#snapRefresh').addEventListener('click', load);
+  $('#snapQ').addEventListener('input', L.debounce(function () { render(state.items, $('#snapQ').value); }, 180));
+
+  $('#snapBody').addEventListener('click', function (ev) {
+    var t = ev.target;
+    var open = t.closest ? t.closest('[data-open]') : null;
+    if (open) { L.openUrl('/shots/' + open.dataset.open); return; }
+    var del = t.closest ? t.closest('[data-del]') : null;
+    if (del) {
+      if (del.dataset.armed !== '1') {
+        del.dataset.armed = '1'; del.textContent = 'SURE?';
+        setTimeout(function () { del.dataset.armed = '0'; del.textContent = 'DELETE'; }, 3500);
+        return;
+      }
+      L.api('/api/snaps/delete', { method: 'POST', body: { id: del.dataset.del } })
+        .then(function () { L.toast('Shot deleted', 'ok'); load(); });
+      return;
+    }
+    var bible = t.closest ? t.closest('[data-bible]') : null;
+    if (bible && bible.dataset.bible) {
+      L.api('/api/bible/add', { method: 'POST', body: { url: bible.dataset.bible, tags: 'snap' } })
+        .then(function (r) { if (r && r.ok) L.toast('Filed in ' + r.record.folder, 'ok'); });
+    }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

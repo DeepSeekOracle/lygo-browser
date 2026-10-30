@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LYGO Browser — Bookmark Bible</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="hud.css">
+</head>
+<body class="app">
+
+<header class="hud-head">
+  <div class="head-in">
+    <div class="head-top">
+      <div class="brand">
+        <div class="wordmark">LYGO BROWSER</div>
+        <div class="tagline">BOOKMARK BIBLE · AGENT+HUMAN</div>
+      </div>
+      <div class="pills" aria-label="System status">
+        <span class="pill" data-pill="bridge"><i class="dot"></i><span class="k">BRIDGE</span><span class="v">—</span></span>
+        <span class="pill" data-pill="record"><i class="dot"></i><span class="k">RECORDS</span><span class="v">—</span></span>
+        <span class="pill" data-pill="archive"><i class="dot"></i><span class="k">ARCHIVE</span><span class="v">—</span></span>
+      </div>
+    </div>
+    <div class="head-nav">
+      <nav class="tabs" aria-label="Sections">
+        <a class="tab" href="index.html">DASHBOARD</a>
+        <a class="tab" href="bible.html" aria-current="page">BIBLE</a>
+        <a class="tab" href="vault.html">VAULT</a>
+        <a class="tab" href="archive.html">ARCHIVE</a>
+              <a class="tab" href="history.html">HISTORY</a>
+        <a class="tab" href="downloads.html">DOWNLOADS</a>
+        <a class="tab" href="snaps.html">SNAPS</a>
+        <a class="tab" href="agent.html">AGENT</a>
+        <a class="tab" href="settings.html">SETTINGS</a>
+      </nav>
+      <div class="head-meta">
+        <span>BOOKMARK BIBLE</span>
+        <span class="sep"></span>
+        <span id="bibleMeta">— RECORDS · — FOLDERS</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="bible-grid">
+
+  <aside class="rail col" aria-label="Folder rail">
+    <div class="rail-cap">Folders</div>
+    <div id="rail"></div>
+  </aside>
+
+  <section class="mid" aria-label="Records">
+    <div class="listbar">
+      <form class="searchwrap" id="searchForm" role="search" autocomplete="off">
+        <input class="inp" id="q" type="text" spellcheck="false"
+               placeholder="Search the Bible   / focus   Esc clear"
+               aria-label="Search the Bible" autocomplete="off">
+      </form>
+      <div class="sortrow">
+        <div class="seg" role="group" aria-label="Sort records">
+          <button type="button" data-sort="title" aria-pressed="true">TITLE</button>
+          <button type="button" data-sort="folder" aria-pressed="false">FOLDER</button>
+          <button type="button" data-sort="added" aria-pressed="false">ADDED</button>
+        </div>
+        <span class="count" id="listCount">—</span>
+      </div>
+    </div>
+    <div class="rec-list" id="list" aria-label="Records"></div>
+  </section>
+
+  <aside class="detail col" id="detail" aria-label="Record detail"></aside>
+
+</main>
+
+<script src="hud.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var L = window.LYGO;
+  if (!L) return;
+  var $ = L.$;
+
+  var params = new URLSearchParams(window.location.search);
+  var state = {
+    folders: [],
+    records: [],
+    byId: new Map(),
+    q: '',
+    folder: 'ALL',
+    sort: 'title',
+    searchIds: null,
+    searchMode: 'server',
+    selectedId: null,
+    pendingId: params.get('id') || '',
+    seq: 0,
+    online: false
+  };
+
+  state.q = params.get('q') || '';
+  state.folder = params.get('folder') || 'ALL';
+
+  /* ---- helpers --------------------------------------------------------- */
+
+  function current() {
+    return state.selectedId ? state.byId.get(state.selectedId) : null;
+  }
+
+  function folderName(id) {
+    for (var i = 0; i < state.folders.length; i += 1) {
+      if (state.folders[i].id === id) return state.folders[i].name || id;
+    }
+    return id || 'UNFILED';
+  }
+
+  function folderCounts() {
+    var map = {};
+    state.records.forEach(function (rec) {
+      var key = rec.folder || 'UNFILED';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }
+
+  function matches(rec) {
+    if (state.folder !== 'ALL' && rec.folder !== state.folder) return false;
+    if (!state.q.trim()) return true;
+    if (state.searchIds) return state.searchIds.has(rec.id);
+    var needle = state.q.trim().toLowerCase();
+    return String(rec.title || '').toLowerCase().indexOf(needle) !== -1 ||
+      String(rec.url || '').toLowerCase().indexOf(needle) !== -1 ||
+      String(rec.note || '').toLowerCase().indexOf(needle) !== -1 ||
+      (rec.tags || []).join(' ').toLowerCase().indexOf(needle) !== -1;
+  }
+
+  function visibleRecords() {
+    var list = state.records.filter(matches);
+    var sorters = {
+      title: function (a, b) {
+        return String(a.title || a.url || '').localeCompare(String(b.title || b.url || ''), undefined, { sensitivity: 'base' });
+      },
+      folder: function (a, b) {
+        return String(a.folder || '').localeCompare(String(b.folder || '')) ||
+          String(a.title || '').localeCompare(String(b.title || ''));
+      },
+      added: function (a, b) {
+        return String(b.added || '').localeCompare(String(a.added || ''));
+      }
+    };
+    list.sort(sorters[state.sort] || sorters.title);
+    return list;
+  }
+
+  function updateMeta() {
+    var node = $('#bibleMeta');
+    if (node) {
+      node.textContent = L.fmtInt(state.records.length) + ' RECORDS · ' + L.fmtInt(state.folders.length) + ' FOLDERS';
+    }
+  }
+
+  /* ---- rail ------------------------------------------------------------ */
+
+  function railItem(id, name, count) {
+    return L.el('button', {
+      class: 'rail-item', type: 'button', 'data-folder': id,
+      'aria-current': state.folder === id ? 'true' : 'false',
+      title: name
+    },
+      L.el('span', { text: name }),
+      L.el('span', { class: 'rail-count', text: L.fmtInt(count) }));
+  }
+
+  function renderRail() {
+    var host = $('#rail');
+    var counts = folderCounts();
+    host.replaceChildren();
+    host.append(railItem('ALL', 'ALL', state.records.length));
+    state.folders.forEach(function (folder) {
+      host.append(railItem(folder.id, folder.name || folder.id, counts[folder.id] || 0));
+    });
+  }
+
+  /* ---- list ------------------------------------------------------------ */
+
+  function recRow(rec) {
+    var archived = !!(rec.archived && rec.archived.at);
+    var meta = L.el('div', { class: 'rec-meta' },
+      L.el('span', { class: 'chip', title: folderName(rec.folder), text: folderName(rec.folder) }),
+      L.el('span', { class: 'dom', text: L.domain(rec.url) || '' }));
+    if (archived) meta.append(L.el('span', { class: 'tick-label', title: 'Archived' }, L.el('span', { class: 'tick' }), 'ARC'));
+
+    var row = L.el('button', {
+      class: 'rec', type: 'button', 'data-id': rec.id,
+      'aria-current': rec.id === state.selectedId ? 'true' : 'false',
+      title: rec.url || ''
+    },
+      L.el('span', { class: 'rec-title', text: rec.title || rec.url || rec.id }),
+      meta);
+
+    var tags = Array.isArray(rec.tags) ? rec.tags.slice(0, 5) : [];
+    if (tags.length) {
+      row.append(L.el('div', { class: 'rec-tags' }, tags.map(function (tag) {
+        return L.el('span', { class: 'chip chip--tag', text: tag });
+      })));
+    }
+    return row;
+  }
+
+  function renderList() {
+    var host = $('#list');
+    var rows = visibleRecords();
+    host.replaceChildren();
+    if (!rows.length) {
+      host.append(L.empty(
+        state.q || state.folder !== 'ALL' ? 'No matching records' : 'The Bible is empty',
+        state.online
+          ? (state.records.length ? 'Adjust the folder or search.' : 'Add a link from the dashboard.')
+          : 'Bridge offline. Start the LYGO Browser.'));
+    } else {
+      var frag = document.createDocumentFragment();
+      rows.forEach(function (rec) { frag.append(recRow(rec)); });
+      host.append(frag);
+    }
+    $('#listCount').textContent = L.fmtInt(rows.length) + ' / ' + L.fmtInt(state.records.length);
+  }
+
+  /* ---- detail ---------------------------------------------------------- */
+
+  function folderSelect(selected) {
+    var sel = L.el('select', { class: 'sel', id: 'dFolder' });
+    var found = false;
+    state.folders.forEach(function (folder) {
+      if (folder.id === selected) found = true;
+      sel.append(L.el('option', { value: folder.id, text: folder.name || folder.id }));
+    });
+    if (selected && !found) sel.append(L.el('option', { value: selected, text: selected }));
+    sel.value = selected || (state.folders[0] ? state.folders[0].id : '');
+    return sel;
+  }
+
+  function archRow(label, value, title, field) {
+    return L.el('div', { class: 'arch-row', 'data-field': field || null },
+      L.el('span', { text: label }),
+      L.el('span', { class: 'v', title: title || '', text: value }));
+  }
+
+  function archiveBlock(rec) {
+    var arch = rec.archived || {};
+    var id = encodeURIComponent(rec.id);
+    var sha = String(arch.sha256 || '');
+    var files = Array.isArray(arch.files) && arch.files.length ? arch.files.join(' · ') : 'page.html · page.md · shot.png';
+    var box = L.el('div', { class: 'arch' },
+      L.el('div', { class: 'arch-h', text: 'Archived receipt' }),
+      archRow('AT', L.fmtDate(arch.at)),
+      archRow('BYTES', L.fmtBytes(arch.bytes), '', 'bytes'),
+      archRow('FILES', files),
+      archRow('SHA-256', sha || '—', sha, 'sha'));
+    box.append(L.el('div', { class: 'arch-links' },
+      L.el('a', { class: 'link', href: '/archive/' + id + '/page.md', target: '_blank', rel: 'noopener', text: 'PAGE.MD' }),
+      L.el('a', { class: 'link', href: '/archive/' + id + '/shot.png', target: '_blank', rel: 'noopener', text: 'SHOT.PNG' }),
+      L.el('a', { class: 'link', href: 'archive.html', text: 'ALL ARCHIVES' })));
+    return box;
+  }
+
+  function renderDetail() {
+    var host = $('#detail');
+    var grid = document.querySelector('.bible-grid');
+    host.replaceChildren();
+    var rec = current();
+    if (grid) grid.classList.toggle('no-selection', !rec);
+
+    if (!rec) {
+      host.append(L.empty(
+        state.records.length ? 'No record selected' : 'The Bible is empty',
+        state.records.length
+          ? 'Choose a record on the left to read, file, or archive it.'
+          : (state.online ? 'Add a link from the dashboard.' : 'Bridge offline. Start the LYGO Browser.')));
+      if (!state.records.length && state.online) {
+        host.append(L.el('div', { class: 'arch-links' },
+          L.el('a', { class: 'link', href: 'index.html', text: 'ADD A LINK ON THE DASHBOARD' })));
+      }
+      return;
+    }
+
+    var archived = !!(rec.archived && rec.archived.at);
+    var form = L.el('form', { class: 'd-form', id: 'detailForm', autocomplete: 'off' });
+    form.append(
+      L.el('div', { class: 'f' },
+        L.el('label', { for: 'dTitle', text: 'Title' }),
+        L.el('input', { class: 'inp', id: 'dTitle', type: 'text', value: rec.title || '' })),
+      L.el('div', { class: 'f' },
+        L.el('label', { for: 'dFolder', text: 'Folder' }),
+        folderSelect(rec.folder)),
+      L.el('div', { class: 'f' },
+        L.el('label', { for: 'dTags', text: 'Tags (comma separated)' }),
+        L.el('input', { class: 'inp', id: 'dTags', type: 'text', value: (rec.tags || []).join(', '), placeholder: 'lygo, portal, owned' })),
+      L.el('div', { class: 'f' },
+        L.el('label', { for: 'dNote', text: 'Note' }),
+        L.el('textarea', { class: 'ta', id: 'dNote', rows: '4', placeholder: 'Why this link matters' }, rec.note || '')),
+      L.el('div', { class: 'd-actions' },
+        L.el('button', { class: 'btn btn--gold', type: 'submit', id: 'dSave', text: 'SAVE' }),
+        L.el('button', { class: 'btn', type: 'button', id: 'dOpen', text: 'OPEN' }),
+        L.el('button', { class: 'btn', type: 'button', id: 'dArchive', text: archived ? 'RE-ARCHIVE' : 'ARCHIVE' }))
+    );
+
+    host.append(
+      L.el('div', { class: 'd-head' },
+        L.el('div', { class: 'd-id', text: rec.id }),
+        L.el('h2', { class: 'd-title', text: rec.title || rec.url || rec.id }),
+        L.el('span', { class: 'd-url', title: rec.url || '', tabindex: '0', text: rec.url || '' })),
+      form,
+      archived ? archiveBlock(rec) : L.el('div', {
+        class: 'arch-pending',
+        text: 'Not archived. ARCHIVE stores page.html, page.md, shot.png and a SHA-256 receipt under /archive/' + rec.id + '/.'
+      })
+    );
+
+    form.addEventListener('submit', saveRecord);
+    $('#dOpen').addEventListener('click', function () { L.openUrl(rec.url); });
+    $('#dArchive').addEventListener('click', archiveRecord);
+    if (archived) hydrateArchive(rec);
+  }
+
+  function hydrateArchive(rec) {
+    if (!rec || !rec.archived || !rec.archived.at || rec.archived.sha256) return;
+    var id = rec.id;
+    L.api('/api/archive', { silent: true })
+      .then(function (data) {
+        var items = data && Array.isArray(data.items) ? data.items : [];
+        var match = null;
+        for (var i = 0; i < items.length; i += 1) {
+          if (items[i].id === id) { match = items[i]; break; }
+        }
+        if (!match) return;
+        rec.archived.sha256 = match.sha256 || rec.archived.sha256 || null;
+        if (match.bytes !== undefined && match.bytes !== null) rec.archived.bytes = match.bytes;
+        if (current() !== rec) return;
+        var box = document.querySelector('#detail .arch');
+        if (!box) return;
+        var shaCell = box.querySelector('[data-field="sha"] .v');
+        if (shaCell) {
+          shaCell.textContent = rec.archived.sha256 || '—';
+          shaCell.title = rec.archived.sha256 || '';
+        }
+        var bytesCell = box.querySelector('[data-field="bytes"] .v');
+        if (bytesCell) bytesCell.textContent = L.fmtBytes(rec.archived.bytes);
+      })
+      .catch(function () { /* receipt stays as-is */ });
+  }
+
+  function select(id) {
+    if (!state.byId.has(id)) return;
+    state.selectedId = id;
+    L.$$('#list .rec').forEach(function (node) {
+      node.setAttribute('aria-current', node.dataset.id === id ? 'true' : 'false');
+    });
+    renderDetail();
+    var row = document.querySelector('#list .rec[data-id="' + id.replace(/"/g, '\\"') + '"]');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ---- mutations ------------------------------------------------------- */
+
+  function saveRecord(ev) {
+    ev.preventDefault();
+    var rec = current();
+    if (!rec) return;
+    var btn = $('#dSave');
+    var payload = {
+      id: rec.id,
+      title: $('#dTitle').value.trim(),
+      folder: $('#dFolder').value,
+      tags: $('#dTags').value.split(',').map(function (tag) { return tag.trim(); }).filter(Boolean).join(','),
+      note: $('#dNote').value,
+      status: rec.status || 'active'
+    };
+    btn.disabled = true;
+    btn.textContent = 'SAVING';
+    L.api('/api/bible/update', { method: 'POST', body: payload })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Save failed', 'err');
+          return;
+        }
+        rec.title = (res.record && res.record.title) || payload.title || rec.url || rec.id;
+        rec.folder = (res.record && res.record.folder) || payload.folder;
+        rec.tags = res.record && Array.isArray(res.record.tags)
+          ? res.record.tags
+          : payload.tags.split(',').filter(Boolean);
+        rec.note = res.record && typeof res.record.note === 'string' ? res.record.note : payload.note;
+        L.toast('Saved · ' + folderName(rec.folder), 'ok');
+        renderRail();
+        renderList();
+        renderDetail();
+      })
+      .catch(function () { /* api() already reported it */ })
+      .then(function () {
+        if (btn.isConnected) { btn.disabled = false; btn.textContent = 'SAVE'; }
+      });
+  }
+
+  function archiveRecord() {
+    var rec = current();
+    if (!rec) return;
+    var btn = $('#dArchive');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'ARCHIVING';
+    L.api('/api/bible/archive', { method: 'POST', body: { id: rec.id } })
+      .then(function (res) {
+        if (!res || res.ok === false) {
+          L.toast((res && res.error) || 'Archive failed', 'err');
+          if (btn.isConnected) { btn.disabled = false; btn.textContent = 'ARCHIVE'; }
+          return;
+        }
+        rec.archived = {
+          at: new Date().toISOString(),
+          shot: '/archive/' + rec.id + '/shot.png',
+          md: '/archive/' + rec.id + '/page.md',
+          html: '/archive/' + rec.id + '/page.html',
+          bytes: res.bytes !== undefined && res.bytes !== null ? res.bytes : (rec.archived && rec.archived.bytes) || 0,
+          sha256: res.sha256 || (rec.archived && rec.archived.sha256) || null,
+          files: Array.isArray(res.files) ? res.files : null,
+          dir: res.dir || null
+        };
+        L.toast('Archived · ' + String(res.sha256 || '').slice(0, 12), 'ok');
+        renderList();
+        renderDetail();
+      })
+      .catch(function () {
+        if (btn.isConnected) { btn.disabled = false; btn.textContent = 'ARCHIVE'; }
+      });
+  }
+
+  /* ---- search ---------------------------------------------------------- */
+
+  function serverSearch() {
+    var q = state.q.trim();
+    if (!q) {
+      state.seq += 1;
+      state.searchIds = null;
+      state.searchMode = 'server';
+      renderList();
+      return;
+    }
+    var seq = state.seq += 1;
+    L.api('/api/bible/search?q=' + encodeURIComponent(q) + '&limit=500', { silent: true })
+      .then(function (data) {
+        if (seq !== state.seq) return;
+        state.searchIds = new Set((data && Array.isArray(data.hits) ? data.hits : []).map(function (rec) { return rec.id; }));
+        state.searchMode = 'server';
+        renderList();
+      })
+      .catch(function () {
+        if (seq !== state.seq) return;
+        state.searchIds = null;
+        state.searchMode = 'local';
+        renderList();
+      });
+  }
+
+  var debouncedSearch = L.debounce(serverSearch, 180);
+
+  /* ---- events ---------------------------------------------------------- */
+
+  $('#q').addEventListener('input', function () {
+    state.q = $('#q').value;
+    if (!state.q.trim()) {
+      state.seq += 1;
+      state.searchIds = null;
+      state.searchMode = 'server';
+      renderList();
+    }
+    debouncedSearch();
+  });
+
+  $('#searchForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    serverSearch();
+  });
+
+  L.$$('[data-sort]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.sort = btn.dataset.sort;
+      L.$$('[data-sort]').forEach(function (other) {
+        other.setAttribute('aria-pressed', other === btn ? 'true' : 'false');
+      });
+      renderList();
+    });
+  });
+
+  $('#rail').addEventListener('click', function (ev) {
+    var item = ev.target && ev.target.closest ? ev.target.closest('[data-folder]') : null;
+    if (!item) return;
+    state.folder = item.dataset.folder;
+    renderRail();
+    renderList();
+  });
+
+  $('#list').addEventListener('click', function (ev) {
+    var row = ev.target && ev.target.closest ? ev.target.closest('.rec') : null;
+    if (row) select(row.dataset.id);
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    var target = ev.target;
+    var tag = target && target.tagName ? target.tagName : '';
+    var typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable);
+
+    if (ev.key === '/' && !typing && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      ev.preventDefault();
+      $('#q').focus();
+      $('#q').select();
+      return;
+    }
+    if (ev.key !== 'Escape') return;
+    if (typing && tag !== 'INPUT') { target.blur(); return; }
+    if (state.q) {
+      state.q = '';
+      state.seq += 1;
+      state.searchIds = null;
+      state.searchMode = 'server';
+      $('#q').value = '';
+      renderList();
+    }
+    $('#q').blur();
+  });
+
+  /* ---- boot ------------------------------------------------------------ */
+
+  function deriveFolders() {
+    if (state.folders.length || !state.records.length) return;
+    var seen = {};
+    state.records.forEach(function (rec) {
+      var id = rec.folder || 'UNFILED';
+      if (!seen[id]) {
+        seen[id] = true;
+        state.folders.push({ id: id, name: id, desc: '' });
+      }
+    });
+  }
+
+  function load() {
+    return L.api('/api/bible', { silent: true })
+      .then(function (data) {
+        state.folders = data && Array.isArray(data.folders) ? data.folders : [];
+        state.records = data && Array.isArray(data.records) ? data.records : [];
+        state.online = true;
+      })
+      .catch(function () {
+        state.folders = [];
+        state.records = [];
+        state.online = false;
+      })
+      .then(function () {
+        deriveFolders();
+        state.byId = new Map();
+        state.records.forEach(function (rec) { state.byId.set(rec.id, rec); });
+
+        var folderExists = state.folders.some(function (folder) { return folder.id === state.folder; });
+        if (state.folder !== 'ALL' && !folderExists) state.folder = 'ALL';
+        if (state.pendingId && state.byId.has(state.pendingId)) state.selectedId = state.pendingId;
+
+        renderRail();
+        renderList();
+        renderDetail();
+        updateMeta();
+        if (state.q.trim()) serverSearch();
+        var chosen = document.querySelector('#list .rec[aria-current="true"]');
+        if (chosen && chosen.scrollIntoView) chosen.scrollIntoView({ block: 'center' });
+      });
+  }
+
+  if (state.q) $('#q').value = state.q;
+  load();
+})();
+</script>
+</body>
+</html>
